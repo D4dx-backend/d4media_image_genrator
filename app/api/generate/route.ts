@@ -89,11 +89,19 @@ function validateImageFile(file: File): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('=== API Route Called ===');
+  console.log('Method:', request.method);
+  console.log('URL:', request.url);
+  console.log('Headers:', Object.fromEntries(request.headers.entries()));
+  console.log('Has Replicate token:', !!process.env.REPLICATE_API_TOKEN);
+  console.log('Token length:', process.env.REPLICATE_API_TOKEN?.length || 0);
+  
   try {
     // Check if Replicate is initialized
     if (!replicate) {
+      console.error('Replicate not initialized');
       return NextResponse.json(
-        { error: 'Service temporarily unavailable' },
+        { error: 'Service temporarily unavailable - Replicate not initialized' },
         { status: 503 }
       );
     }
@@ -181,14 +189,22 @@ export async function POST(request: NextRequest) {
     });
 
     // Call Replicate API with timeout
+    console.log('About to call Replicate API...');
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Request timeout')), 60000) // Increased to 60s
     );
 
-    const output = await Promise.race([
-      replicate.run(model, { input }),
-      timeoutPromise
-    ]);
+    let output;
+    try {
+      output = await Promise.race([
+        replicate.run(model, { input }),
+        timeoutPromise
+      ]);
+      console.log('Replicate API call successful');
+    } catch (replicateError) {
+      console.error('Replicate API error:', replicateError);
+      throw replicateError;
+    }
 
     // Validate output
     if (!output) {
