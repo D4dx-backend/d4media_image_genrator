@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "app/api/generate/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "REPLICATE_API_TOKEN": "@replicate_api_token"
+  }
+}
