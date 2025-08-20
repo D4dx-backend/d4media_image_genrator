@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
     // Log for monitoring (remove sensitive data)
     console.log('Generation request:', {
       model,
+      prompt: prompt,
       promptLength: prompt.length,
       imageType: imageFile!.type,
       imageSize: imageFile!.size,
@@ -271,9 +272,9 @@ export async function POST(request: NextRequest) {
     let statusCode = 500;
     
     if (error instanceof Error) {
-      // Include the actual error message in development for debugging
-      if (process.env.NODE_ENV === 'development') {
-        errorMessage = `Development error: ${error.message}`;
+      // Include the actual error message for debugging (temporarily in production too)
+      if (process.env.NODE_ENV === 'development' || true) {
+        errorMessage = `Debug error: ${error.message}`;
       } else if (error.message.includes('timeout')) {
         errorMessage = 'Request timed out. The image generation is taking longer than expected.';
         statusCode = 408;
