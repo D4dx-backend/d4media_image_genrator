@@ -147,55 +147,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert to data URL - ensure proper format for qwen/qwen-image-edit
-    let imageData: string;
-    try {
-      const bytes = await imageFile!.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      
-      // Ensure we have a valid MIME type
-      let mimeType = imageFile!.type;
-      if (!mimeType || !mimeType.startsWith('image/')) {
-        // Default to jpeg if no valid MIME type
-        mimeType = 'image/jpeg';
-      }
-      
-      imageData = `data:${mimeType};base64,${buffer.toString('base64')}`;
-      
-      console.log('Created data URL:', {
-        mimeType,
-        originalType: imageFile!.type,
-        dataLength: imageData.length,
-        preview: imageData.substring(0, 100) + '...'
-      });
-      
-    } catch (error) {
-      console.error('Failed to convert image:', error);
-      return NextResponse.json(
-        { error: 'Failed to process image file' },
-        { status: 400 }
-      );
-    }
+    // NEW APPROACH: Use File object directly (Replicate handles file uploads)
+    // This matches how the Replicate client works with local files
+    
+    console.log('Using File object directly (Replicate client approach)');
+    console.log('File details:', {
+      name: imageFile!.name,
+      type: imageFile!.type,
+      size: imageFile!.size
+    });
 
-    // Input parameters - try with all optional parameters to match schema defaults
+    // Use the exact same minimal approach as the working test endpoint
     const input = {
-      image: imageData,
+      image: imageFile!, // Pass File object directly - Replicate client handles this
       prompt: prompt.trim(),
-      go_fast: true,
-      aspect_ratio: "match_input_image" as const,
-      output_format: "webp" as const,
-      output_quality: 95,
-      disable_safety_checker: false
+      output_quality: 80 // Same as working test
     };
 
-    console.log('Input parameters:', {
+    console.log('Input parameters (minimal like test):', {
       prompt: input.prompt,
-      go_fast: input.go_fast,
-      aspect_ratio: input.aspect_ratio,
-      output_format: input.output_format,
       output_quality: input.output_quality,
-      disable_safety_checker: input.disable_safety_checker,
-      imageLength: imageData.length
+      imageType: typeof input.image
     });
 
     // Log for monitoring (remove sensitive data)
