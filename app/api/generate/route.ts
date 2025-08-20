@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert image to base64 data URL (qwen/qwen-image-edit accepts data URLs)
+    // Convert image to base64 data URL - qwen/qwen-image-edit accepts data URLs as URIs
     let imageData: string;
     try {
       const bytes = await imageFile!.arrayBuffer();
@@ -160,12 +160,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Input parameters matching official Replicate documentation
+    // Input parameters matching the exact API schema from Replicate docs
     const input = {
-      image: imageData, // Data URL or public URL
-      prompt: prompt.trim(),
-      output_quality: 80
+      image: imageData, // URI format (data URL is valid URI)
+      prompt: prompt.trim()
+      // Using only required fields first to match working test endpoint
     };
+
+    console.log('Image data format:', imageData.substring(0, 50) + '...');
+    console.log('Input parameters:', {
+      prompt: input.prompt,
+      image: `[data:${imageFile!.type};base64,... (${imageData.length} chars)]`
+    });
 
     // Log for monitoring (remove sensitive data)
     console.log('Generation request:', {
@@ -214,47 +220,44 @@ export async function POST(request: NextRequest) {
     console.log('Is array:', Array.isArray(output));
 
     // Handle qwen/qwen-image-edit output format
+    // According to Replicate docs, output should be an array of URL strings
     let images: string[] = [];
     
+    console.log('Processing output...');
+    
     if (Array.isArray(output)) {
-      console.log('Processing array output, length:', output.length);
-      // qwen/qwen-image-edit returns an array of file objects with .url() method
+      console.log('Output is array with length:', output.length);
+      
+      // qwen/qwen-image-edit should return an array of URL strings
       images = output.map((item, index) => {
-        console.log(`Processing item ${index}:`, typeof item, item);
+        console.log(`Item ${index}:`, typeof item, item);
         
         if (typeof item === 'string') {
-          console.log(`Item ${index} is string:`, item);
+          console.log(`Item ${index} is URL string:`, item);
           return item;
         } else if (item && typeof item === 'object') {
-          console.log(`Item ${index} is object with keys:`, Object.keys(item));
+          console.log(`Item ${index} is object:`, Object.keys(item));
           
-          if ('url' in item) {
-            const url = typeof item.url === 'function' ? item.url() : item.url;
-            console.log(`Item ${index} url:`, url);
+          // Handle file objects with url() method (from Node.js client)
+          if ('url' in item && typeof item.url === 'function') {
+            const url = item.url();
+            console.log(`Item ${index} url() method result:`, url);
             return url;
-          } else if (item.toString && item.toString !== Object.prototype.toString) {
-            const str = item.toString();
-            console.log(`Item ${index} toString:`, str);
-            return str;
+          } else if ('url' in item) {
+            console.log(`Item ${index} url property:`, item.url);
+            return item.url;
           }
         }
-        console.log(`Item ${index} could not be processed`);
+        
+        console.log(`Item ${index} could not be processed, returning null`);
         return null;
-      }).filter(Boolean) as string[];
+      }).filter((item): item is string => item !== null);
+      
     } else if (typeof output === 'string') {
-      console.log('Output is string:', output);
+      console.log('Output is single URL string:', output);
       images = [output];
-    } else if (output && typeof output === 'object') {
-      console.log('Output is single object with keys:', Object.keys(output));
-      if ('url' in output) {
-        const url = typeof output.url === 'function' ? output.url() : output.url;
-        console.log('Single object url:', url);
-        images = [url];
-      } else if (output.toString && output.toString !== Object.prototype.toString) {
-        const str = output.toString();
-        console.log('Single object toString:', str);
-        images = [str];
-      }
+    } else {
+      console.log('Unexpected output format:', typeof output, output);
     }
     
     console.log('Extracted images:', images);
@@ -273,6 +276,13 @@ export async function POST(request: NextRequest) {
     if (validImages.length === 0) {
       console.error('No valid images found in output:', output);
       console.error('Extracted images were:', images);
+      
+      // Check if we got empty objects - this might indicate an API issue
+      if (Array.isArray(output) && output.length > 0 && output.every(item => 
+        typeof item === 'object' && Object.keys(item).length === 0)) {
+        throw new Error('Replicate API returned empty objects. This might indicate an issue with the input image format or model parameters.');
+      }
+      
       throw new Error(`No valid images generated. Output type: ${typeof output}, Array: ${Array.isArray(output)}, Raw: ${JSON.stringify(output)}`);
     }
 
