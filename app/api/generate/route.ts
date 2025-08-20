@@ -147,27 +147,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Try using the File object directly (Option 2 from Replicate docs)
-    // This might work better than data URLs for qwen/qwen-image-edit
-    
-    // Input parameters - using File object as per Replicate local file docs
+    // Convert to data URL - ensure proper format for qwen/qwen-image-edit
+    let imageData: string;
+    try {
+      const bytes = await imageFile!.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      
+      // Ensure we have a valid MIME type
+      let mimeType = imageFile!.type;
+      if (!mimeType || !mimeType.startsWith('image/')) {
+        // Default to jpeg if no valid MIME type
+        mimeType = 'image/jpeg';
+      }
+      
+      imageData = `data:${mimeType};base64,${buffer.toString('base64')}`;
+      
+      console.log('Created data URL:', {
+        mimeType,
+        originalType: imageFile!.type,
+        dataLength: imageData.length,
+        preview: imageData.substring(0, 100) + '...'
+      });
+      
+    } catch (error) {
+      console.error('Failed to convert image:', error);
+      return NextResponse.json(
+        { error: 'Failed to process image file' },
+        { status: 400 }
+      );
+    }
+
+    // Input parameters - try with all optional parameters to match schema defaults
     const input = {
-      image: imageFile!, // Pass File object directly
+      image: imageData,
       prompt: prompt.trim(),
-      output_quality: 80
+      go_fast: true,
+      aspect_ratio: "match_input_image" as const,
+      output_format: "webp" as const,
+      output_quality: 95,
+      disable_safety_checker: false
     };
 
-    console.log('Using File object directly');
-    console.log('File details:', {
-      name: imageFile!.name,
-      type: imageFile!.type,
-      size: imageFile!.size,
-      lastModified: imageFile!.lastModified
-    });
     console.log('Input parameters:', {
       prompt: input.prompt,
+      go_fast: input.go_fast,
+      aspect_ratio: input.aspect_ratio,
+      output_format: input.output_format,
       output_quality: input.output_quality,
-      image: `[File object: ${imageFile!.name}]`
+      disable_safety_checker: input.disable_safety_checker,
+      imageLength: imageData.length
     });
 
     // Log for monitoring (remove sensitive data)
