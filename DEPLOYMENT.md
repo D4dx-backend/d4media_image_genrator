@@ -31,7 +31,7 @@ This guide covers deploying your Next.js AI image generator to various hosting p
 
 4. **Set Environment Variables**:
    ```bash
-   vercel env add REPLICATE_API_TOKEN
+   vercel env add REPLICATE_API_TOKEN production
    # Enter your Replicate API token when prompted
    ```
 
@@ -40,7 +40,9 @@ This guide covers deploying your Next.js AI image generator to various hosting p
 2. Click "New Project"
 3. Import from GitHub: `https://github.com/D4dx-backend/d4media_image_genrator.git`
 4. Add environment variable:
-   - `REPLICATE_API_TOKEN`: Your Replicate API token
+   - Key: `REPLICATE_API_TOKEN`
+   - Value: `your_replicate_api_token_here`
+   - Environment: Production (and Preview if needed)
 5. Deploy!
 
 ## 🔷 Option 2: Netlify

@@ -89,11 +89,19 @@ function validateImageFile(file: File): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('=== API Route Called ===');
+  console.log('Method:', request.method);
+  console.log('URL:', request.url);
+  console.log('Headers:', Object.fromEntries(request.headers.entries()));
+  console.log('Has Replicate token:', !!process.env.REPLICATE_API_TOKEN);
+  console.log('Token length:', process.env.REPLICATE_API_TOKEN?.length || 0);
+  
   try {
     // Check if Replicate is initialized
     if (!replicate) {
+      console.error('Replicate not initialized');
       return NextResponse.json(
-        { error: 'Service temporarily unavailable' },
+        { error: 'Service temporarily unavailable - Replicate not initialized' },
         { status: 503 }
       );
     }
@@ -139,32 +147,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert image to base64 with error handling
+    // Convert to data URL - ensure proper format for qwen/qwen-image-edit
     let imageData: string;
     try {
       const bytes = await imageFile!.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      imageData = `data:${imageFile!.type};base64,${buffer.toString('base64')}`;
+      
+      // Ensure we have a valid MIME type
+      let mimeType = imageFile!.type;
+      if (!mimeType || !mimeType.startsWith('image/')) {
+        // Default to jpeg if no valid MIME type
+        mimeType = 'image/jpeg';
+      }
+      
+      imageData = `data:${mimeType};base64,${buffer.toString('base64')}`;
+      
+      console.log('Created data URL:', {
+        mimeType,
+        originalType: imageFile!.type,
+        dataLength: imageData.length,
+        preview: imageData.substring(0, 100) + '...'
+      });
+      
     } catch (error) {
+      console.error('Failed to convert image:', error);
       return NextResponse.json(
         { error: 'Failed to process image file' },
         { status: 400 }
       );
     }
 
+    // Input parameters - try with all optional parameters to match schema defaults
     const input = {
       image: imageData,
       prompt: prompt.trim(),
       go_fast: true,
-      aspect_ratio: "match_input_image",
-      output_format: "webp",
-      output_quality: 80,
+      aspect_ratio: "match_input_image" as const,
+      output_format: "webp" as const,
+      output_quality: 95,
       disable_safety_checker: false
     };
+
+    console.log('Input parameters:', {
+      prompt: input.prompt,
+      go_fast: input.go_fast,
+      aspect_ratio: input.aspect_ratio,
+      output_format: input.output_format,
+      output_quality: input.output_quality,
+      disable_safety_checker: input.disable_safety_checker,
+      imageLength: imageData.length
+    });
 
     // Log for monitoring (remove sensitive data)
     console.log('Generation request:', {
       model,
+      prompt: prompt,
       promptLength: prompt.length,
       imageType: imageFile!.type,
       imageSize: imageFile!.size,
@@ -181,60 +218,97 @@ export async function POST(request: NextRequest) {
     });
 
     // Call Replicate API with timeout
+    console.log('About to call Replicate API...');
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Request timeout')), 60000) // Increased to 60s
     );
 
-    const output = await Promise.race([
-      replicate.run(model, { input }),
-      timeoutPromise
-    ]);
+    let output;
+    try {
+      output = await Promise.race([
+        replicate.run(model, { input }),
+        timeoutPromise
+      ]);
+      console.log('Replicate API call successful');
+    } catch (replicateError) {
+      console.error('Replicate API error:', replicateError);
+      throw replicateError;
+    }
 
     // Validate output
     if (!output) {
       throw new Error('No output received from model');
     }
 
-    console.log('Raw output from Replicate:', output);
+    console.log('Raw output from Replicate:', JSON.stringify(output, null, 2));
+    console.log('Output type:', typeof output);
+    console.log('Is array:', Array.isArray(output));
 
-    // Handle different output formats from Replicate
+    // Handle qwen/qwen-image-edit output format
+    // According to Replicate docs, output should be an array of URL strings
     let images: string[] = [];
     
+    console.log('Processing output...');
+    
     if (Array.isArray(output)) {
-      // If output is an array of URLs or file objects
-      images = output.map(item => {
+      console.log('Output is array with length:', output.length);
+      
+      // qwen/qwen-image-edit should return an array of URL strings
+      images = output.map((item, index) => {
+        console.log(`Item ${index}:`, typeof item, item);
+        
         if (typeof item === 'string') {
+          console.log(`Item ${index} is URL string:`, item);
           return item;
-        } else if (item && typeof item === 'object' && 'url' in item) {
-          return typeof item.url === 'function' ? item.url() : item.url;
-        } else if (item && typeof item === 'object' && item.toString) {
-          return item.toString();
+        } else if (item && typeof item === 'object') {
+          console.log(`Item ${index} is object:`, Object.keys(item));
+          
+          // Handle file objects with url() method (from Node.js client)
+          if ('url' in item && typeof item.url === 'function') {
+            const url = item.url();
+            console.log(`Item ${index} url() method result:`, url);
+            return url;
+          } else if ('url' in item) {
+            console.log(`Item ${index} url property:`, item.url);
+            return item.url;
+          }
         }
+        
+        console.log(`Item ${index} could not be processed, returning null`);
         return null;
-      }).filter(Boolean) as string[];
+      }).filter((item): item is string => item !== null);
+      
     } else if (typeof output === 'string') {
-      // If output is a single URL string
+      console.log('Output is single URL string:', output);
       images = [output];
-    } else if (output && typeof output === 'object') {
-      // If output is a single file object
-      if ('url' in output) {
-        const url = typeof output.url === 'function' ? output.url() : output.url;
-        images = [url];
-      } else if (output.toString) {
-        images = [output.toString()];
-      }
+    } else {
+      console.log('Unexpected output format:', typeof output, output);
     }
     
+    console.log('Extracted images:', images);
+    
     // Validate image URLs
-    const validImages = images.filter(img => 
-      typeof img === 'string' && 
-      img.length > 0 &&
-      (img.startsWith('https://') || img.startsWith('http://') || img.startsWith('data:'))
-    );
+    const validImages = images.filter(img => {
+      const isValid = typeof img === 'string' && 
+        img.length > 0 &&
+        (img.startsWith('https://') || img.startsWith('http://') || img.startsWith('data:'));
+      console.log(`Image "${img}" is valid:`, isValid);
+      return isValid;
+    });
+
+    console.log('Valid images:', validImages);
 
     if (validImages.length === 0) {
       console.error('No valid images found in output:', output);
-      throw new Error('No valid images generated');
+      console.error('Extracted images were:', images);
+      
+      // Check if we got empty objects - this might indicate an API issue
+      if (Array.isArray(output) && output.length > 0 && output.every(item => 
+        typeof item === 'object' && Object.keys(item).length === 0)) {
+        throw new Error('Replicate API returned empty objects. This might indicate an issue with the input image format or model parameters.');
+      }
+      
+      throw new Error(`No valid images generated. Output type: ${typeof output}, Array: ${Array.isArray(output)}, Raw: ${JSON.stringify(output)}`);
     }
 
     console.log('Valid images found:', validImages.length);
@@ -257,22 +331,26 @@ export async function POST(request: NextRequest) {
     let statusCode = 500;
     
     if (error instanceof Error) {
-      // Include the actual error message in development for debugging
-      if (process.env.NODE_ENV === 'development') {
-        errorMessage = `Development error: ${error.message}`;
-      } else if (error.message.includes('timeout')) {
+      const errorMsg = error.message;
+      // Include the actual error message for debugging (temporarily in production too)
+      if (process.env.NODE_ENV === 'development' || true) {
+        errorMessage = `Debug error: ${errorMsg}`;
+      } else if (errorMsg.includes('timeout')) {
         errorMessage = 'Request timed out. The image generation is taking longer than expected.';
         statusCode = 408;
-      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+      } else if (errorMsg.includes('rate limit') || errorMsg.includes('quota')) {
         errorMessage = 'API rate limit exceeded. Please try again in a few minutes.';
         statusCode = 429;
-      } else if (error.message.includes('authentication') || error.message.includes('unauthorized')) {
+      } else if (errorMsg.includes('authentication') || errorMsg.includes('unauthorized')) {
         errorMessage = 'API authentication failed. Please check configuration.';
         statusCode = 401;
-      } else if (error.message.includes('invalid') || error.message.includes('bad request')) {
+      } else if (errorMsg.includes('invalid') || errorMsg.includes('bad request')) {
         errorMessage = 'Invalid request parameters. Please check your inputs.';
         statusCode = 400;
       }
+    } else {
+      // Handle non-Error objects
+      errorMessage = `Debug error: ${String(error)}`;
     }
     
     return NextResponse.json(
