@@ -18,9 +18,6 @@ export async function GET() {
     const input = {
       image: "https://replicate.delivery/pbxt/NYfZuQXicUlwvUfeNmX2IgEfCz7vzuVrXitm9pgXVm1RBIJO/image.png",
       prompt: "Change the sweater to be blue with white text",
-      go_fast: true,
-      output_format: "webp",
-      enhance_prompt: false,
       output_quality: 80
     };
 
@@ -34,19 +31,14 @@ export async function GET() {
     let images: string[] = [];
     
     if (Array.isArray(output)) {
-      images = output.map((item, index) => {
-        console.log(`Item ${index}:`, typeof item, item);
-        
+      images = output.map(item => {
         if (typeof item === 'string') {
           return item;
         } else if (item && typeof item === 'object' && 'url' in item) {
-          // Handle file objects with url() method as shown in documentation
           return typeof item.url === 'function' ? item.url() : item.url;
         }
-        
-        console.log(`Item ${index} could not be processed`);
-        return null;
-      }).filter((item): item is string => item !== null);
+        return item?.toString() || '';
+      }).filter(Boolean);
     }
 
     return NextResponse.json({
