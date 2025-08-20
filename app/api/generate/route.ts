@@ -64,14 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'REPLICATE_API_TOKEN not set' }, { status: 500 });
   }
 
-  // In your API routes, change this:
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
-
-// To this:
-const replicate = new Replicate({ 
-  auth: process.env.REPLICATE_API_TOKEN,
-  useFileOutput: false  // This forces URLs instead of file objects
-});
+  const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
   const clientId = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
   if (!checkRateLimit(clientId)) {
     return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
