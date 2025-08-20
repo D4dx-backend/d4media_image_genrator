@@ -147,30 +147,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert image to base64 data URL - qwen/qwen-image-edit accepts data URLs as URIs
-    let imageData: string;
-    try {
-      const bytes = await imageFile!.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      imageData = `data:${imageFile!.type};base64,${buffer.toString('base64')}`;
-    } catch (error) {
-      return NextResponse.json(
-        { error: 'Failed to process image file' },
-        { status: 400 }
-      );
-    }
-
-    // Input parameters matching the exact API schema from Replicate docs
+    // Try using the File object directly (Option 2 from Replicate docs)
+    // This might work better than data URLs for qwen/qwen-image-edit
+    
+    // Input parameters - using File object as per Replicate local file docs
     const input = {
-      image: imageData, // URI format (data URL is valid URI)
-      prompt: prompt.trim()
-      // Using only required fields first to match working test endpoint
+      image: imageFile!, // Pass File object directly
+      prompt: prompt.trim(),
+      output_quality: 80
     };
 
-    console.log('Image data format:', imageData.substring(0, 50) + '...');
+    console.log('Using File object directly');
+    console.log('File details:', {
+      name: imageFile!.name,
+      type: imageFile!.type,
+      size: imageFile!.size,
+      lastModified: imageFile!.lastModified
+    });
     console.log('Input parameters:', {
       prompt: input.prompt,
-      image: `[data:${imageFile!.type};base64,... (${imageData.length} chars)]`
+      output_quality: input.output_quality,
+      image: `[File object: ${imageFile!.name}]`
     });
 
     // Log for monitoring (remove sensitive data)
