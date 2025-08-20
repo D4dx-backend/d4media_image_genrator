@@ -288,6 +288,9 @@ export async function POST(request: NextRequest) {
         errorMessage = 'Invalid request parameters. Please check your inputs.';
         statusCode = 400;
       }
+    } else {
+      // Handle non-Error objects
+      errorMessage = `Debug error: ${String(error)}`;
     }
     
     return NextResponse.json(
