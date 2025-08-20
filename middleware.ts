@@ -15,8 +15,8 @@ export function middleware(request: NextRequest) {
     // Check for required headers
     const contentType = request.headers.get('content-type');
     
-    // Only allow multipart/form-data for file uploads on generate endpoint
-    if (request.method === 'POST' && request.nextUrl.pathname === '/api/generate' && !contentType?.includes('multipart/form-data')) {
+    // Only allow multipart/form-data for file uploads
+    if (request.method === 'POST' && !contentType?.includes('multipart/form-data')) {
       return NextResponse.json(
         { error: 'Invalid content type' },
         { status: 400 }
