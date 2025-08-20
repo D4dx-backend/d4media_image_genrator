@@ -272,19 +272,20 @@ export async function POST(request: NextRequest) {
     let statusCode = 500;
     
     if (error instanceof Error) {
+      const errorMsg = error.message;
       // Include the actual error message for debugging (temporarily in production too)
       if (process.env.NODE_ENV === 'development' || true) {
-        errorMessage = `Debug error: ${error.message}`;
-      } else if (error.message.includes('timeout')) {
+        errorMessage = `Debug error: ${errorMsg}`;
+      } else if (errorMsg.includes('timeout')) {
         errorMessage = 'Request timed out. The image generation is taking longer than expected.';
         statusCode = 408;
-      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+      } else if (errorMsg.includes('rate limit') || errorMsg.includes('quota')) {
         errorMessage = 'API rate limit exceeded. Please try again in a few minutes.';
         statusCode = 429;
-      } else if (error.message.includes('authentication') || error.message.includes('unauthorized')) {
+      } else if (errorMsg.includes('authentication') || errorMsg.includes('unauthorized')) {
         errorMessage = 'API authentication failed. Please check configuration.';
         statusCode = 401;
-      } else if (error.message.includes('invalid') || error.message.includes('bad request')) {
+      } else if (errorMsg.includes('invalid') || errorMsg.includes('bad request')) {
         errorMessage = 'Invalid request parameters. Please check your inputs.';
         statusCode = 400;
       }
