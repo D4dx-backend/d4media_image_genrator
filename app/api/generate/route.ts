@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert image to base64 with error handling
+    // Convert image to base64 data URL (qwen/qwen-image-edit accepts data URLs)
     let imageData: string;
     try {
       const bytes = await imageFile!.arrayBuffer();
@@ -160,14 +160,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Input parameters matching official Replicate documentation
     const input = {
-      image: imageData,
+      image: imageData, // Data URL or public URL
       prompt: prompt.trim(),
-      go_fast: true,
-      aspect_ratio: "match_input_image",
-      output_format: "webp",
-      output_quality: 80,
-      disable_safety_checker: false
+      output_quality: 80
     };
 
     // Log for monitoring (remove sensitive data)
@@ -213,15 +210,16 @@ export async function POST(request: NextRequest) {
 
     console.log('Raw output from Replicate:', output);
 
-    // Handle different output formats from Replicate
+    // Handle qwen/qwen-image-edit output format
     let images: string[] = [];
     
     if (Array.isArray(output)) {
-      // If output is an array of URLs or file objects
+      // qwen/qwen-image-edit returns an array of file objects with .url() method
       images = output.map(item => {
         if (typeof item === 'string') {
           return item;
         } else if (item && typeof item === 'object' && 'url' in item) {
+          // Call the url() method if it exists (as shown in documentation)
           return typeof item.url === 'function' ? item.url() : item.url;
         } else if (item && typeof item === 'object' && item.toString) {
           return item.toString();
@@ -232,7 +230,7 @@ export async function POST(request: NextRequest) {
       // If output is a single URL string
       images = [output];
     } else if (output && typeof output === 'object') {
-      // If output is a single file object
+      // If output is a single file object with url() method
       if ('url' in output) {
         const url = typeof output.url === 'function' ? output.url() : output.url;
         images = [url];
