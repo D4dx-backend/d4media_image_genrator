@@ -209,47 +209,71 @@ export async function POST(request: NextRequest) {
       throw new Error('No output received from model');
     }
 
-    console.log('Raw output from Replicate:', output);
+    console.log('Raw output from Replicate:', JSON.stringify(output, null, 2));
+    console.log('Output type:', typeof output);
+    console.log('Is array:', Array.isArray(output));
 
     // Handle qwen/qwen-image-edit output format
     let images: string[] = [];
     
     if (Array.isArray(output)) {
+      console.log('Processing array output, length:', output.length);
       // qwen/qwen-image-edit returns an array of file objects with .url() method
-      images = output.map(item => {
+      images = output.map((item, index) => {
+        console.log(`Processing item ${index}:`, typeof item, item);
+        
         if (typeof item === 'string') {
+          console.log(`Item ${index} is string:`, item);
           return item;
-        } else if (item && typeof item === 'object' && 'url' in item) {
-          // Call the url() method if it exists (as shown in documentation)
-          return typeof item.url === 'function' ? item.url() : item.url;
-        } else if (item && typeof item === 'object' && item.toString) {
-          return item.toString();
+        } else if (item && typeof item === 'object') {
+          console.log(`Item ${index} is object with keys:`, Object.keys(item));
+          
+          if ('url' in item) {
+            const url = typeof item.url === 'function' ? item.url() : item.url;
+            console.log(`Item ${index} url:`, url);
+            return url;
+          } else if (item.toString && item.toString !== Object.prototype.toString) {
+            const str = item.toString();
+            console.log(`Item ${index} toString:`, str);
+            return str;
+          }
         }
+        console.log(`Item ${index} could not be processed`);
         return null;
       }).filter(Boolean) as string[];
     } else if (typeof output === 'string') {
-      // If output is a single URL string
+      console.log('Output is string:', output);
       images = [output];
     } else if (output && typeof output === 'object') {
-      // If output is a single file object with url() method
+      console.log('Output is single object with keys:', Object.keys(output));
       if ('url' in output) {
         const url = typeof output.url === 'function' ? output.url() : output.url;
+        console.log('Single object url:', url);
         images = [url];
-      } else if (output.toString) {
-        images = [output.toString()];
+      } else if (output.toString && output.toString !== Object.prototype.toString) {
+        const str = output.toString();
+        console.log('Single object toString:', str);
+        images = [str];
       }
     }
     
+    console.log('Extracted images:', images);
+    
     // Validate image URLs
-    const validImages = images.filter(img => 
-      typeof img === 'string' && 
-      img.length > 0 &&
-      (img.startsWith('https://') || img.startsWith('http://') || img.startsWith('data:'))
-    );
+    const validImages = images.filter(img => {
+      const isValid = typeof img === 'string' && 
+        img.length > 0 &&
+        (img.startsWith('https://') || img.startsWith('http://') || img.startsWith('data:'));
+      console.log(`Image "${img}" is valid:`, isValid);
+      return isValid;
+    });
+
+    console.log('Valid images:', validImages);
 
     if (validImages.length === 0) {
       console.error('No valid images found in output:', output);
-      throw new Error('No valid images generated');
+      console.error('Extracted images were:', images);
+      throw new Error(`No valid images generated. Output type: ${typeof output}, Array: ${Array.isArray(output)}, Raw: ${JSON.stringify(output)}`);
     }
 
     console.log('Valid images found:', validImages.length);
