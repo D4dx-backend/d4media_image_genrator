@@ -95,11 +95,14 @@ export default function Home() {
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
         try {
-          const response = await fetch('/api/generate', {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal,
-          });
+                  const response = await fetch('/api/generate', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+          headers: {
+            // Don't set Content-Type header - let the browser set it with boundary for FormData
+          }
+        });
 
           clearTimeout(timeoutId);
 
@@ -115,6 +118,10 @@ export default function Home() {
                 errorMessage = 'Rate limit exceeded. Please wait before trying again.';
               } else if (response.status === 400) {
                 errorMessage = 'Invalid request. Please check your inputs.';
+              } else if (response.status === 408) {
+                errorMessage = 'Request timed out. Please try again.';
+              } else if (response.status === 500) {
+                errorMessage = 'Server error. Please try again later.';
               }
             }
             
