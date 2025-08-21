@@ -11,6 +11,31 @@ const MAX_PROMPT_LENGTH = 1000;
 const RATE_LIMIT_REQUESTS = 10; // per window
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 
+// Authentication helper
+function authenticate(request: NextRequest): boolean {
+  const authHeader = request.headers.get('authorization');
+  
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    return false;
+  }
+
+  // Extract and decode credentials
+  const base64Credentials = authHeader.slice('Basic '.length);
+  const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
+  const [username, password] = credentials.split(':');
+
+  // Check against environment variables
+  const expectedUsername = process.env.USER_NAME;
+  const expectedPassword = process.env.PASSWORD;
+
+  if (!expectedUsername || !expectedPassword) {
+    console.error('USER_NAME or PASSWORD environment variables not set');
+    return false;
+  }
+
+  return username === expectedUsername && password === expectedPassword;
+}
+
 // Rate‐limiting helper
 function checkRateLimit(clientId: string): boolean {
   const now = Date.now();
@@ -60,6 +85,19 @@ async function waitForPrediction(replicate: Replicate, id: string) {
 }
 
 export async function POST(request: NextRequest) {
+  // Check authentication first
+  if (!authenticate(request)) {
+    return NextResponse.json(
+      { error: 'Authentication required' }, 
+      { 
+        status: 401,
+        headers: {
+          'WWW-Authenticate': 'Basic realm="API Access"'
+        }
+      }
+    );
+  }
+
   if (!process.env.REPLICATE_API_TOKEN) {
     return NextResponse.json({ error: 'REPLICATE_API_TOKEN not set' }, { status: 500 });
   }
@@ -128,7 +166,48 @@ export async function POST(request: NextRequest) {
   });
 }
 
-// Reject other methods
-export async function GET()    { return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); }
-export async function PUT()    { return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); }
-export async function DELETE() { return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); }
+// Reject other methods with auth check
+export async function GET(request: NextRequest) { 
+  if (!authenticate(request)) {
+    return NextResponse.json(
+      { error: 'Authentication required' }, 
+      { 
+        status: 401,
+        headers: {
+          'WWW-Authenticate': 'Basic realm="API Access"'
+        }
+      }
+    );
+  }
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); 
+}
+
+export async function PUT(request: NextRequest) { 
+  if (!authenticate(request)) {
+    return NextResponse.json(
+      { error: 'Authentication required' }, 
+      { 
+        status: 401,
+        headers: {
+          'WWW-Authenticate': 'Basic realm="API Access"'
+        }
+      }
+    );
+  }
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); 
+}
+
+export async function DELETE(request: NextRequest) { 
+  if (!authenticate(request)) {
+    return NextResponse.json(
+      { error: 'Authentication required' }, 
+      { 
+        status: 401,
+        headers: {
+          'WWW-Authenticate': 'Basic realm="API Access"'
+        }
+      }
+    );
+  }
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); 
+}
